@@ -1,5 +1,6 @@
+use std::assert_eq;
 use anchor_lang::{self, declare_program};
-use anchor_litesvm::{AnchorContext, AnchorLiteSVM, AssertionHelpers, Pubkey};
+use anchor_litesvm::{AnchorContext, AnchorLiteSVM, AssertionHelpers, Pubkey, TestHelpers};
 use solana_signer::Signer;
 
 declare_program!(voting);
@@ -84,6 +85,7 @@ fn intialize_candidate(
     result.assert_success();
 }
 
+#[allow(dead_code)]
 fn cast_vote(
     ctx:&mut AnchorContext,
     signer: &anchor_litesvm::Keypair,
@@ -101,4 +103,63 @@ fn cast_vote(
     }).instruction().unwrap();
 
     ctx.execute_instruction(ix, &[signer]).unwrap()
+}
+
+#[test]
+fn test_init_poll(){
+    let mut ctx =  setup();
+    let user = ctx.svm.create_funded_account(10_000_000_000).unwrap();
+
+    let poll_id =  1;
+    initialize_poll(&mut ctx, &user, poll_id, 0,u64::MAX, "Test Poll","Test Poll for Voting");
+
+    intialize_candidate(&mut ctx, &user, poll_id, "Alice");
+    intialize_candidate(&mut ctx, &user, poll_id, "Bob");
+
+    let poll_account:PollAccount = ctx.get_account(&get_poll_pda(poll_id)).unwrap();
+    let aliceaccount:CandidateAccount = ctx.get_account(&get_candidate_pda(poll_id, "Alice")).unwrap();
+    let bobaccount:CandidateAccount = ctx.get_account(&get_candidate_pda(poll_id, "Bob")).unwrap();
+
+    assert_eq!(poll_account.poll_option_index,2);
+    assert_eq!(aliceaccount.candidate_name,"Alice");
+    assert_eq!(aliceaccount.candidate_votes,0);
+    assert_eq!(bobaccount.candidate_name,"Bob");
+    assert_eq!(bobaccount.candidate_votes,0);
+}
+
+#[test]
+fn test_init_candidates() {
+    let mut ctx = setup();
+    let user = ctx.svm.create_funded_account(10_000_000_000).unwrap();
+
+    let poll_id = 1;
+    initialize_poll(&mut ctx, &user, poll_id, 0, u64::MAX, "Test Poll", "A test poll for voting");
+    intialize_candidate(&mut ctx, &user, poll_id, "Alice");
+    intialize_candidate(&mut ctx, &user, poll_id, "Bob");
+
+    let poll_account:PollAccount = ctx.get_account(&get_poll_pda(poll_id)).unwrap();
+    let aliceaccount:CandidateAccount = ctx.get_account(&get_candidate_pda(poll_id, "Alice")).unwrap();
+    let bobaccount:CandidateAccount = ctx.get_account(&get_candidate_pda(poll_id, "Bob")).unwrap();
+
+    assert_eq!(poll_account.poll_option_index,2);
+    assert_eq!(aliceaccount.candidate_name,"Alice");
+    assert_eq!(aliceaccount.candidate_votes,0);
+    assert_eq!(bobaccount.candidate_name,"Bob");
+    assert_eq!(bobaccount.candidate_votes,0);
+}
+
+#[test]
+fn test_vote(){
+    let mut ctx =  setup();
+    let authority = ctx.svm.create_funded_account(10_000_000_000).unwrap();
+    let voter = ctx.svm.create_funded_account(10_000_000_000).unwrap();
+
+    let poll_id = 1;
+    initialize_poll(&mut ctx, &authority, poll_id, 0, 2_000, "Test Poll", "It is a Test Poll Voting");
+    intialize_candidate(&mut ctx, &authority, poll_id, "Alice");
+    let result = cast_vote(&mut ctx, &voter, poll_id, "Alice");
+    result.assert_success();
+
+    let alice_account:CandidateAccount = ctx.get_account(&get_candidate_pda(poll_id, "Alice")).unwrap();
+    assert_eq!(alice_account.candidate_votes,1);
 }
