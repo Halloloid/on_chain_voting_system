@@ -163,3 +163,29 @@ fn test_vote(){
     let alice_account:CandidateAccount = ctx.get_account(&get_candidate_pda(poll_id, "Alice")).unwrap();
     assert_eq!(alice_account.candidate_votes,1);
 }
+
+#[test]
+fn test_vote_before_start_fails(){
+    let mut ctx = setup();
+    let authority = ctx.svm.create_funded_account(10_000_000_000).unwrap();
+    let voter = ctx.svm.create_funded_account(10_000_000_000).unwrap();
+
+    let poll_id = 1;
+    initialize_poll(&mut ctx, &authority, poll_id, 1_500, 2_000, "Future Poll", "Voting has not yet started");
+    intialize_candidate(&mut ctx, &authority, poll_id, "Alice");
+
+    cast_vote(&mut ctx, &voter, poll_id, "Alice").assert_failure().assert_anchor_error("VotingNotStarted");
+}
+
+#[test]
+fn test_vote_after_end_fails(){
+    let mut ctx = setup();
+    let authority = ctx.svm.create_funded_account(10_000_000_000).unwrap();
+    let voter = ctx.svm.create_funded_account(10_000_000_000).unwrap();
+
+    let poll_id = 1;
+    initialize_poll(&mut ctx, &authority, poll_id, 0, 500, "Closed Poll", "Voting has ended");
+    intialize_candidate(&mut ctx, &authority, poll_id, "Alice");
+
+    cast_vote(&mut ctx, &voter, poll_id, "Alice").assert_failure().assert_anchor_error("VotingEnded");
+}
